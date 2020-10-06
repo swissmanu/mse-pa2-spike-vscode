@@ -1,6 +1,5 @@
 import { interval } from "rxjs";
-import { take } from "rxjs/operators";
-import { map } from "./instrument";
+import { map, take } from "./instrument";
 
 export function exampleObservable() {
   return interval(500).pipe(

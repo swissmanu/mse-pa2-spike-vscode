@@ -1,0 +1,13 @@
+{
+  "name": "typescript-rxjs-inspection-plugin",
+  "version": "1.0.0",
+  "main": "out/index.js",
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^4.0.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf out/"
+  }
+}

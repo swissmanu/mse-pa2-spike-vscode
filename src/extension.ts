@@ -2,92 +2,139 @@
 // Import the module and reference it with the alias vscode in your code below
 import * as vscode from "vscode";
 import * as ts from "typescript";
-import * as ipc from "node-ipc";
 import * as ws from "ws";
 import * as http from "http";
+import { LineAndColumnComputer } from "./utils";
+import { getDescendantAtRange } from "./compiler/getDescendantAtRange";
+import { Event, EventSource, TreeMode } from "./types";
+import { assert } from "console";
 
 const DEFAULT_DEBUGGER_PORT = 9229;
+let httpServer: http.Server | null = null;
 
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
   // rxJsInspection -> link up with package.json contribution
 
+  const collectedEvents: Event[] = [];
+  let updateVisualizer: (events: ReadonlyArray<Event>) => void = () => {};
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("spike-vscode.commands.showVisualizer", () => {
+      const panel = vscode.window.createWebviewPanel("visualizer", "Observable", vscode.ViewColumn.Beside, {});
+      panel.onDidDispose(() => {}, null, context.subscriptions);
+      updateVisualizer = (events) =>
+        (panel.webview.html = `
+      <html>
+      <body>
+        <ol>
+          ${events.map((e) => `<li>${JSON.stringify(e)}</li>`)}
+        </ol>
+      </body>
+      </html>
+      `);
+    })
+  );
+
   const editor = vscode.window.activeTextEditor;
   if (editor) {
     ts.createSourceFile(editor.document.uri.toString(), editor.document.getText(), ts.ScriptTarget.Latest);
 
-    const breakpointTreeDataProvider = new BreakpointTreeDataProvider();
-    vscode.debug.onDidChangeBreakpoints((e) => {
-      breakpointTreeDataProvider.updateFrom(e);
-    });
-
-    const treeView = vscode.window.createTreeView("rxJsInspection", {
-      treeDataProvider: breakpointTreeDataProvider,
+    const eventSourcesTreeDataProvider = new EventSourcesTreeDataProvider();
+    const treeView = vscode.window.createTreeView("spike-vscode.views.eventSources", {
+      treeDataProvider: eventSourcesTreeDataProvider,
     });
     context.subscriptions.push(treeView);
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand("spike-vscode.commands.addEventSource", (eventSource: EventSource) => {
+        assert(typeof eventSource.source === "string");
+        eventSourcesTreeDataProvider.addEventSource(eventSource);
+      })
+    );
+
+    httpServer = http.createServer();
+    const webSocketServer = new ws.Server({ server: httpServer });
+    webSocketServer.on("connection", (socket) => {
+      socket.on("message", (m) => {
+        const rawMessage = m.toString();
+        try {
+          const jsonMessage = JSON.parse(rawMessage);
+          if (typeof jsonMessage.source === "string") {
+            if (eventSourcesTreeDataProvider.hasEventSource(jsonMessage.source)) {
+              collectedEvents.push(jsonMessage);
+              updateVisualizer(collectedEvents);
+            }
+          }
+        } catch {
+          console.log(`${m}`);
+        }
+      });
+    });
+    httpServer.listen(DEFAULT_DEBUGGER_PORT + 1);
   }
 
-  // ipc.config.retry = 1500;
-  // ipc.config.maxRetries = 5;
-  // ipc.connectTo("spike", () => {
-  //   ipc.of.world.on("message", (data: unknown) => console.log(data));
-  // });
+  vscode.languages.registerCodeActionsProvider(
+    { scheme: "file", language: "typescript" },
+    {
+      provideCodeActions: (document, range) => {
+        const text = document.getText();
+        const foo = new LineAndColumnComputer(text);
+        const sourceFile = ts.createSourceFile("parsed", text, ts.ScriptTarget.Latest);
+        const start = foo.getPosFromLineAndColumn(range.start.line, range.start.character);
 
-  const httpServer = http.createServer();
-  const webSocketServer = new ws.Server({ server: httpServer });
-  webSocketServer.on("connection", (socket) => {
-    socket.on("message", (m) => console.log("%s", m));
-  });
-  httpServer.listen(DEFAULT_DEBUGGER_PORT + 1);
+        const node = getDescendantAtRange(TreeMode.forEachChild, sourceFile, [start, start], ts);
+        // console.log(node)
 
-  // Use the console to output diagnostic information (console.log) and errors (console.error)
-  // This line of code will only be executed once when your extension is activated
-  console.log('Congratulations, your extension "spike-vscode" is now active!');
-
-  // The command has been defined in the package.json file
-  // Now provide the implementation of the command with registerCommand
-  // The commandId parameter must match the command field in package.json
-  let disposable = vscode.commands.registerCommand("spike-vscode.helloWorld", () => {
-    // The code you place here will be executed every time your command is executed
-
-    // Display a message box to the user
-    vscode.window.showInformationMessage("Hello World from spike-vscode!");
-  });
-
-  context.subscriptions.push(disposable);
+        if (node) {
+          const text = node.getText(sourceFile);
+          if (text === "map" || text === "take") {
+            const action = new vscode.CodeAction("Visualize Observable...", vscode.CodeActionKind.Empty);
+            const eventSource: EventSource = { source: text };
+            action.command = {
+              command: "spike-vscode.commands.addEventSource",
+              title: "Debug Observable...",
+              arguments: [eventSource],
+            };
+            return [action];
+          }
+        }
+      },
+    }
+  );
 }
 
-// this method is called when your extension is deactivated
-export function deactivate() {}
+export function deactivate() {
+  if (httpServer) {
+    httpServer.close();
+    httpServer = null;
+  }
+}
 
-class BreakpointTreeDataProvider implements vscode.TreeDataProvider<vscode.Breakpoint> {
-  private _onDidChangeTreeData: vscode.EventEmitter<undefined> = new vscode.EventEmitter<undefined>();
-  readonly onDidChangeTreeData: vscode.Event<undefined> = this._onDidChangeTreeData.event;
+class EventSourcesTreeDataProvider implements vscode.TreeDataProvider<EventSource> {
+  private onDidChangeTreeDataEventEmitter: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
+  readonly onDidChangeTreeData: vscode.Event<void> = this.onDidChangeTreeDataEventEmitter.event;
 
-  private breakpoints: Map<vscode.Breakpoint["id"], vscode.Breakpoint> = new Map();
+  private eventSources: ReadonlyArray<EventSource> = [];
 
-  getChildren(element?: vscode.Breakpoint): vscode.Breakpoint[] {
+  getChildren(element?: EventSource): EventSource[] {
     if (!element) {
-      return [...this.breakpoints.values()].filter((b) => b instanceof vscode.SourceBreakpoint);
+      return this.eventSources as EventSource[];
     }
     return [];
   }
 
-  getTreeItem(element: vscode.Breakpoint): vscode.TreeItem {
-    return new vscode.TreeItem(element.id);
+  getTreeItem(element: EventSource): vscode.TreeItem {
+    return new vscode.TreeItem(element.source);
   }
 
-  updateFrom(e: vscode.BreakpointsChangeEvent) {
-    for (const b of e.changed) {
-      this.breakpoints.set(b.id, b);
-    }
-    for (const b of e.removed) {
-      this.breakpoints.delete(b.id);
-    }
-    for (const b of e.added) {
-      this.breakpoints.set(b.id, b);
-    }
-    this._onDidChangeTreeData.fire(undefined);
+  addEventSource(eventSource: EventSource) {
+    this.eventSources = [...this.eventSources, eventSource];
+    this.onDidChangeTreeDataEventEmitter.fire();
+  }
+
+  hasEventSource(source: EventSource["source"]): boolean {
+    return this.eventSources.findIndex((es) => es.source === source) !== -1;
   }
 }

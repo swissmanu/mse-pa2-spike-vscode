@@ -10,6 +10,10 @@
     "Other"
   ],
   "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:javascript",
+    "onLanguage:typescriptreact",
+    "onLanguage:javascriptreact",
     "onCommand:spike-vscode.helloWorld",
     "onDebug"
   ],
@@ -17,15 +21,15 @@
   "contributes": {
     "commands": [
       {
-        "command": "spike-vscode.helloWorld",
-        "title": "Hello World"
+        "command": "spike-vscode.commands.showVisualizer",
+        "title": "Show Visualizer"
       }
     ],
     "views": {
       "debug": [
         {
-          "id": "rxJsInspection",
-          "name": "RxJS Inspection",
+          "id": "spike-vscode.views.eventSources",
+          "name": "Observables",
           "when": "debugConfigurationType == 'node' || debugConfigurationType == 'chrome'"
         }
       ]
