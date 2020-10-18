@@ -9,8 +9,8 @@ export class LineAndColumnComputer {
     this.lineInfos = createLineNumberAndColumns(text);
   }
 
-  getNumberAndColumnFromPos(pos: number) {
-    if (pos < 0) return { lineNumber: 1, column: 1 };
+  getNumberAndColumnFromPos(pos: number): { lineNumber: number; columnNumber: number } {
+    if (pos < 0) return { lineNumber: 1, columnNumber: 1 };
 
     const index = ArrayUtils.binarySearch(this.lineInfos, (info) => {
       if (pos < info.pos) return -1;
@@ -21,9 +21,9 @@ export class LineAndColumnComputer {
     });
     const lineInfo = index >= 0 ? this.lineInfos[index] : this.lineInfos[this.lineInfos.length - 1];
 
-    if (lineInfo == null) return { lineNumber: 1, column: 1 };
+    if (lineInfo == null) return { lineNumber: 1, columnNumber: 1 };
 
-    return { lineNumber: lineInfo.number, column: Math.min(pos - lineInfo.pos + 1, lineInfo.length + 1) };
+    return { lineNumber: lineInfo.number, columnNumber: Math.min(pos - lineInfo.pos + 1, lineInfo.length + 1) };
   }
 
   getPosFromLineAndColumn(line: number, column: number) {

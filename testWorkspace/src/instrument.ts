@@ -3,6 +3,7 @@ import { QueueingSubject } from "queueing-subject";
 import { MonoTypeOperatorFunction, Observable, OperatorFunction, Subscriber } from "rxjs";
 import * as RxOps from "rxjs/operators";
 import * as Event from "./event";
+import * as StackTrace from "stacktrace-js";
 
 declare global {
   namespace NodeJS {
@@ -38,46 +39,53 @@ const sendTelemetry: Event.SendTelemetryFn = (() => {
 })();
 
 export function map<T, R>(project: (value: T, index: number) => R): OperatorFunction<T, R> {
+  const sourceLocation = StackTrace.get();
   return operate((source, subscriber) => {
-    source.pipe(RxOps.map(project)).subscribe(new TelemetrySubscriber(subscriber, "map", sendTelemetry));
+    source.pipe(RxOps.map(project)).subscribe(new TelemetrySubscriber(subscriber, sourceLocation, sendTelemetry));
   });
 }
 
 export function take<T>(n: number): MonoTypeOperatorFunction<T> {
+  const sourceLocation = StackTrace.get();
   return operate((source, subscriber) => {
-    source.pipe(RxOps.take(n)).subscribe(new TelemetrySubscriber(subscriber, "take", sendTelemetry));
+    source.pipe(RxOps.take(n)).subscribe(new TelemetrySubscriber(subscriber, sourceLocation, sendTelemetry));
   });
 }
 
 class TelemetrySubscriber<T> extends Subscriber<T> {
+  private source: Promise<Event.EventSource>;
+
   constructor(
     destination: Subscriber<any>,
-    private source: Event.EventSource,
+    sourceLocation: Promise<StackTrace.StackFrame[]>,
     private sendTelemetry: Event.SendTelemetryFn
   ) {
     super(destination);
-    sendTelemetry({ type: "subscribe", source });
+    this.source = sourceLocation.then(([, f]) => Event.sourceFromStackFrame(f));
+    this.source.then((source) => {
+      sendTelemetry({ type: "subscribe", source });
+    });
   }
 
   _next(value: T) {
-    sendTelemetry({ type: "next", source: this.source, value: JSON.stringify(value) });
+    this.source.then((source) => sendTelemetry({ type: "next", source, value: JSON.stringify(value) }));
     this.destination.next(value);
   }
 
   _complete() {
-    sendTelemetry({ type: "completed", source: this.source });
+    this.source.then((source) => sendTelemetry({ type: "completed", source }));
     this.destination.complete();
     this.unsubscribe(); // ensure tear down
   }
 
   _error(err: any) {
-    sendTelemetry({ type: "error", source: this.source, error: err });
+    this.source.then((source) => sendTelemetry({ type: "error", source, error: err }));
     this.destination.error(err);
     this.unsubscribe(); // ensure tear down
   }
 
   unsubscribe() {
-    this.sendTelemetry({ type: "unsubscribe", source: this.source });
+    this.source.then((source) => this.sendTelemetry({ type: "unsubscribe", source }));
     super.unsubscribe();
   }
 }

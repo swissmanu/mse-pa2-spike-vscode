@@ -1,13 +1,13 @@
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
-import * as vscode from "vscode";
-import * as ts from "typescript";
-import * as ws from "ws";
+import { assert } from "console";
 import * as http from "http";
-import { LineAndColumnComputer } from "./utils";
+import * as ts from "typescript";
+import * as vscode from "vscode";
+import * as ws from "ws";
 import { getDescendantAtRange } from "./compiler/getDescendantAtRange";
 import { Event, EventSource, TreeMode } from "./types";
-import { assert } from "console";
+import { LineAndColumnComputer } from "./utils";
 
 const DEFAULT_DEBUGGER_PORT = 9229;
 let httpServer: http.Server | null = null;
@@ -22,9 +22,14 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("spike-vscode.commands.showVisualizer", () => {
-      const panel = vscode.window.createWebviewPanel("visualizer", "Observable Probe Monitor", vscode.ViewColumn.Beside, {
-        enableScripts: true,
-      });
+      const panel = vscode.window.createWebviewPanel(
+        "visualizer",
+        "Observable Probe Monitor",
+        vscode.ViewColumn.Beside,
+        {
+          enableScripts: true,
+        }
+      );
       panel.onDidDispose(() => {}, null, context.subscriptions);
       panel.webview.onDidReceiveMessage(({ command }) => {
         if (command === "clear") {
@@ -59,7 +64,9 @@ export function activate(context: vscode.ExtensionContext) {
 
     context.subscriptions.push(
       vscode.commands.registerCommand("spike-vscode.commands.addEventSource", (eventSource: EventSource) => {
-        assert(typeof eventSource.source === "string");
+        assert(typeof eventSource.fileName === "string");
+        assert(typeof eventSource.lineNumber === "number");
+        assert(typeof eventSource.columnNumber === "number");
         eventSourcesTreeDataProvider.addEventSource(eventSource);
       })
     );
@@ -71,7 +78,8 @@ export function activate(context: vscode.ExtensionContext) {
         const rawMessage = m.toString();
         try {
           const jsonMessage = JSON.parse(rawMessage);
-          if (typeof jsonMessage.source === "string") {
+
+          if (typeof jsonMessage.source === "object") {
             if (eventSourcesTreeDataProvider.hasEventSource(jsonMessage.source)) {
               collectedEvents.push(jsonMessage);
               updateVisualizer(collectedEvents);
@@ -89,30 +97,57 @@ export function activate(context: vscode.ExtensionContext) {
     { scheme: "file", language: "typescript" },
     {
       provideCodeActions: (document, range) => {
-        const text = document.getText();
-        const foo = new LineAndColumnComputer(text);
-        const sourceFile = ts.createSourceFile("parsed", text, ts.ScriptTarget.Latest);
-        const start = foo.getPosFromLineAndColumn(range.start.line, range.start.character);
+        const documentText = document.getText();
+        const lineAndColumnComputer = new LineAndColumnComputer(documentText);
+        const sourceFile = ts.createSourceFile("parsed", documentText, ts.ScriptTarget.Latest);
+        const start = lineAndColumnComputer.getPosFromLineAndColumn(range.start.line, range.start.character + 1);
 
-        const node = getDescendantAtRange(TreeMode.forEachChild, sourceFile, [start, start], ts);
-        // console.log(node)
+        const nodeAtCursor = getDescendantAtRange(TreeMode.forEachChild, sourceFile, [start, start], ts);
 
-        if (node) {
-          const text = node.getText(sourceFile);
-          if (text === "map" || text === "take") {
-            const action = new vscode.CodeAction("Probe Observable...", vscode.CodeActionKind.Empty);
-            const eventSource: EventSource = { source: text };
-            action.command = {
-              command: "spike-vscode.commands.addEventSource",
-              title: "Debug Observable...",
-              arguments: [eventSource],
-            };
-            return [action];
+        if (nodeAtCursor) {
+          if (nodeAtCursor.kind === ts.SyntaxKind.CallExpression) {
+            const identifier = findFirstIdentifierChild(nodeAtCursor, sourceFile);
+            if (identifier) {
+              return createCodeActions(sourceFile, identifier, document, lineAndColumnComputer);
+            }
+          } else if (nodeAtCursor.kind === ts.SyntaxKind.Identifier) {
+            return createCodeActions(sourceFile, nodeAtCursor, document, lineAndColumnComputer);
           }
         }
       },
     }
   );
+}
+
+function findFirstIdentifierChild(node: ts.Node, sourceFile: ts.SourceFile): ts.Node | null {
+  const children = node.getChildren(sourceFile);
+  const index = children.findIndex((c) => c.kind === ts.SyntaxKind.Identifier);
+  return index !== -1 ? children[index] : null;
+}
+
+function createCodeActions(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+  document: vscode.TextDocument,
+  lineAndColumnComputer: LineAndColumnComputer
+): vscode.CodeAction[] {
+  const text = node.getText(sourceFile);
+
+  if (text === "map" || text === "take") {
+    const action = new vscode.CodeAction("Probe Observable...", vscode.CodeActionKind.Empty);
+
+    const lineAndColumnNumber = lineAndColumnComputer.getNumberAndColumnFromPos(node.getStart(sourceFile));
+
+    const eventSource: EventSource = { fileName: document.uri.fsPath, ...lineAndColumnNumber };
+    action.command = {
+      command: "spike-vscode.commands.addEventSource",
+      title: "Debug Observable...",
+      arguments: [eventSource],
+    };
+
+    return [action];
+  }
+  return [];
 }
 
 export function deactivate() {
@@ -136,7 +171,7 @@ class EventSourcesTreeDataProvider implements vscode.TreeDataProvider<EventSourc
   }
 
   getTreeItem(element: EventSource): vscode.TreeItem {
-    return new vscode.TreeItem(element.source);
+    return new vscode.TreeItem(`${element.fileName}:${element.lineNumber}:${element.columnNumber}`);
   }
 
   addEventSource(eventSource: EventSource) {
@@ -144,7 +179,14 @@ class EventSourcesTreeDataProvider implements vscode.TreeDataProvider<EventSourc
     this.onDidChangeTreeDataEventEmitter.fire();
   }
 
-  hasEventSource(source: EventSource["source"]): boolean {
-    return this.eventSources.findIndex((es) => es.source === source) !== -1;
+  hasEventSource(source: EventSource): boolean {
+    return (
+      this.eventSources.findIndex(
+        (es) =>
+          es.fileName === source.fileName &&
+          es.lineNumber === source.lineNumber &&
+          es.columnNumber === source.columnNumber
+      ) !== -1
+    );
   }
 }

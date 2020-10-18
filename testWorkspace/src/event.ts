@@ -3,7 +3,11 @@ import { identity } from "rxjs";
 export type EventType = "subscribe" | "next" | "error" | "unsubscribe" | "completed";
 type TypedEvent<T extends EventType> = { type: T };
 
-export type EventSource = string;
+export type EventSource = {
+  fileName: string;
+  lineNumber: number;
+  columnNumber: number;
+};
 export type EventWithSource = { source: EventSource };
 
 export type SubscribeEvent = EventWithSource & TypedEvent<"subscribe">;
@@ -48,4 +52,12 @@ export function serialize(event: Event): any {
     subscribe: identity,
     unsubscribe: identity,
   })(event);
+}
+
+export function sourceFromStackFrame(stackFrame: StackTrace.StackFrame): EventSource {
+  return {
+    columnNumber: stackFrame.columnNumber || -1,
+    fileName: stackFrame.fileName || "",
+    lineNumber: stackFrame.lineNumber || -1,
+  };
 }
