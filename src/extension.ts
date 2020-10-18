@@ -17,17 +17,27 @@ let httpServer: http.Server | null = null;
 export function activate(context: vscode.ExtensionContext) {
   // rxJsInspection -> link up with package.json contribution
 
-  const collectedEvents: Event[] = [];
+  let collectedEvents: Event[] = [];
   let updateVisualizer: (events: ReadonlyArray<Event>) => void = () => {};
 
   context.subscriptions.push(
     vscode.commands.registerCommand("spike-vscode.commands.showVisualizer", () => {
-      const panel = vscode.window.createWebviewPanel("visualizer", "Observable", vscode.ViewColumn.Beside, {});
+      const panel = vscode.window.createWebviewPanel("visualizer", "Observable Probe Monitor", vscode.ViewColumn.Beside, {
+        enableScripts: true,
+      });
       panel.onDidDispose(() => {}, null, context.subscriptions);
+      panel.webview.onDidReceiveMessage(({ command }) => {
+        if (command === "clear") {
+          collectedEvents = [];
+          updateVisualizer(collectedEvents);
+        }
+      });
       updateVisualizer = (events) =>
         (panel.webview.html = `
       <html>
       <body>
+        <h1>Observable Probe Monitor</h1>
+        <button onclick="acquireVsCodeApi().postMessage({ command: 'clear' });">Clear</button>
         <ol>
           ${events.map((e) => `<li>${JSON.stringify(e)}</li>`)}
         </ol>
@@ -90,7 +100,7 @@ export function activate(context: vscode.ExtensionContext) {
         if (node) {
           const text = node.getText(sourceFile);
           if (text === "map" || text === "take") {
-            const action = new vscode.CodeAction("Visualize Observable...", vscode.CodeActionKind.Empty);
+            const action = new vscode.CodeAction("Probe Observable...", vscode.CodeActionKind.Empty);
             const eventSource: EventSource = { source: text };
             action.command = {
               command: "spike-vscode.commands.addEventSource",

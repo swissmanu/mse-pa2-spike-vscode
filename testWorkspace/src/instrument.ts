@@ -1,6 +1,8 @@
-import { MonoTypeOperatorFunction, Observable, OperatorFunction, Subject } from "rxjs";
-import * as RxOps from "rxjs/operators";
 import * as WebSocket from "isomorphic-ws";
+import { QueueingSubject } from "queueing-subject";
+import { MonoTypeOperatorFunction, Observable, OperatorFunction, Subscriber } from "rxjs";
+import * as RxOps from "rxjs/operators";
+import * as Event from "./event";
 
 declare global {
   namespace NodeJS {
@@ -13,8 +15,8 @@ declare global {
   }
 }
 
-const sendTelemetry = (() => {
-  const hook = new Subject();
+const sendTelemetry: Event.SendTelemetryFn = (() => {
+  const hook = new QueueingSubject<Event.Event>();
   if (typeof window !== "undefined") {
     window.hook = hook.asObservable();
   }
@@ -24,45 +26,79 @@ const sendTelemetry = (() => {
 
   const webSocket = new WebSocket("ws://localhost:9230");
   webSocket.onopen = () => {
-    console.log("open");
-    hook.subscribe((v) => webSocket.send(JSON.stringify(v)));
+    hook.subscribe((event) => {
+      const json = JSON.stringify(Event.serialize(event));
+      webSocket.send(json);
+    });
   };
 
-  type EventType = "subscribe" | "emit" | "error" | "unsubscribe" | "completed";
-  type EventSource = { source: string };
-  type TypedEvent<T extends EventType> = { type: T };
-  type SubscribeEvent = EventSource & TypedEvent<"subscribe">;
-  type EmitEvent = EventSource & TypedEvent<"emit"> & { value: string };
-  type ErrorEvent = EventSource & TypedEvent<"error"> & { error: string };
-  type UnsubscribeEvent = EventSource & TypedEvent<"unsubscribe">;
-  type CompletedEvent = EventSource & TypedEvent<"completed">;
-  type Event = SubscribeEvent | EmitEvent | ErrorEvent | UnsubscribeEvent | CompletedEvent;
-
-  return (event: Event) => {
+  return (event: Event.Event) => {
     hook.next(event);
   };
 })();
 
 export function map<T, R>(project: (value: T, index: number) => R): OperatorFunction<T, R> {
-  return (o) => {
-    sendTelemetry({ type: "subscribe", source: "map" });
-
-    return o.pipe(
-      RxOps.tap((value) => sendTelemetry({ type: "emit", source: "map", value: JSON.stringify(value) })),
-      RxOps.map(project),
-      RxOps.finalize(() => sendTelemetry({ type: "unsubscribe", source: "map" }))
-    );
-  };
+  return operate((source, subscriber) => {
+    source.pipe(RxOps.map(project)).subscribe(new TelemetrySubscriber(subscriber, "map", sendTelemetry));
+  });
 }
 
 export function take<T>(n: number): MonoTypeOperatorFunction<T> {
-  return (o) => {
-    sendTelemetry({ type: "subscribe", source: "take" });
+  return operate((source, subscriber) => {
+    source.pipe(RxOps.take(n)).subscribe(new TelemetrySubscriber(subscriber, "take", sendTelemetry));
+  });
+}
 
-    return o.pipe(
-      RxOps.tap((value) => sendTelemetry({ type: "emit", source: "take", value: JSON.stringify(value) })),
-      RxOps.take(n),
-      RxOps.finalize(() => sendTelemetry({ type: "unsubscribe", source: "take" }))
-    );
+class TelemetrySubscriber<T> extends Subscriber<T> {
+  constructor(
+    destination: Subscriber<any>,
+    private source: Event.EventSource,
+    private sendTelemetry: Event.SendTelemetryFn
+  ) {
+    super(destination);
+    sendTelemetry({ type: "subscribe", source });
+  }
+
+  _next(value: T) {
+    sendTelemetry({ type: "next", source: this.source, value: JSON.stringify(value) });
+    this.destination.next(value);
+  }
+
+  _complete() {
+    sendTelemetry({ type: "completed", source: this.source });
+    this.destination.complete();
+    this.unsubscribe(); // ensure tear down
+  }
+
+  _error(err: any) {
+    sendTelemetry({ type: "error", source: this.source, error: err });
+    this.destination.error(err);
+    this.unsubscribe(); // ensure tear down
+  }
+
+  unsubscribe() {
+    this.sendTelemetry({ type: "unsubscribe", source: this.source });
+    super.unsubscribe();
+  }
+}
+
+function hasLift(source: any): source is { lift: InstanceType<typeof Observable>["lift"] } {
+  return typeof source?.lift === "function";
+}
+
+function operate<T, R>(
+  init: (liftedSource: Observable<T>, subscriber: Subscriber<R>) => (() => void) | void
+): OperatorFunction<T, R> {
+  return (source: Observable<T>) => {
+    if (hasLift(source)) {
+      return source.lift(function (this: Subscriber<R>, liftedSource: Observable<T>) {
+        try {
+          return init(liftedSource, this);
+        } catch (err) {
+          this.error(err);
+        }
+      });
+    }
+    throw new TypeError("Unable to lift unknown Observable type");
   };
 }

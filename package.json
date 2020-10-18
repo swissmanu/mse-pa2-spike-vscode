@@ -22,7 +22,7 @@
     "commands": [
       {
         "command": "spike-vscode.commands.showVisualizer",
-        "title": "Show Visualizer"
+        "title": "Observable Probe Monitor"
       }
     ],
     "views": {

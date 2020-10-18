@@ -10,6 +10,7 @@
   "dependencies": {
     "html-webpack-plugin": "^4.5.0",
     "isomorphic-ws": "^4.0.1",
+    "queueing-subject": "^0.3.4",
     "rxjs": "^6.6.3",
     "ts-loader": "^8.0.4",
     "ts-node": "^9.0.0",
