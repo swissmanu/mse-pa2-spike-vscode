@@ -6,12 +6,12 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			"name": "Run Extension",
+			"name": "Run Extension: Browser and Server",
 			"type": "extensionHost",
       "request": "launch",
 			"args": [
 				"--extensionDevelopmentPath=${workspaceFolder}",
-				"${workspaceFolder}/testWorkspace"
+				"${workspaceFolder}/example-workspaces/browser-and-server"
 			],
 			"outFiles": [
 				"${workspaceFolder}/out/**/*.js"
