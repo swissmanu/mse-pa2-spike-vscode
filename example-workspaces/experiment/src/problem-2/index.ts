@@ -1,6 +1,12 @@
 import { defer, merge, of } from 'rxjs';
-import { distinctUntilChanged, flatMap, startWith, switchMap, tap } from 'rxjs/operators';
 import counter from '../shared/counter';
+import {
+  distinctUntilChanged,
+  flatMap,
+  startWith,
+  switchMap,
+  tap,
+} from '../shared/instrument';
 import onReady from '../shared/onReady';
 import API, { APIInterface } from './api';
 import createUI from './ui';
