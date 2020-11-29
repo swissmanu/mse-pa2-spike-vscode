@@ -9,27 +9,57 @@
   "categories": [
     "Other"
   ],
+  "main": "./out/extension.js",
   "activationEvents": [
     "onLanguage:typescript",
     "onLanguage:javascript",
     "onLanguage:typescriptreact",
     "onLanguage:javascriptreact",
-    "onCommand:spike-vscode.helloWorld",
     "onDebug"
   ],
-  "main": "./out/extension.js",
   "contributes": {
     "commands": [
       {
         "command": "spike-vscode.commands.showVisualizer",
-        "title": "Observable Probe Monitor"
+        "title": "Observable Probe Monitor",
+        "icon": "$(radio-tower)"
+      },
+      {
+        "command": "spike-vscode.commands.addEventSource",
+        "title": "Probe Observable...",
+        "icon": "$(radio-tower)"
+      },
+      {
+        "command": "spike-vscode.commands.removeEventSource",
+        "title": "Delete Observable Probe",
+        "icon": "$(remove)"
+      },
+      {
+        "command": "spike-vscode.commands.removeAllEventSources",
+        "title": "Delete All Observable Probes",
+        "icon": "$(close-all)"
       }
     ],
+    "menus": {
+      "view/item/context": [
+        {
+          "command": "spike-vscode.commands.removeEventSource",
+          "when": "view == spike-vscode.views.eventSources && viewItem == eventSource"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "spike-vscode.commands.removeAllEventSources",
+          "when": "view == spike-vscode.views.eventSources",
+          "group": "navigation"
+        }
+      ]
+    },
     "views": {
       "debug": [
         {
           "id": "spike-vscode.views.eventSources",
-          "name": "Observables",
+          "name": "Observable Probes",
           "when": "debugConfigurationType == 'node' || debugConfigurationType == 'chrome'"
         }
       ]

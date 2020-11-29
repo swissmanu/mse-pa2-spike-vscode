@@ -93,6 +93,7 @@ export function activate(context: vscode.ExtensionContext) {
     ts.createSourceFile(editor.document.uri.toString(), editor.document.getText(), ts.ScriptTarget.Latest);
 
     const eventSourcesTreeDataProvider = new EventSourcesTreeDataProvider();
+    vscode.window.registerTreeDataProvider("spike-vscode.views.eventSources", eventSourcesTreeDataProvider);
     const treeView = vscode.window.createTreeView("spike-vscode.views.eventSources", {
       treeDataProvider: eventSourcesTreeDataProvider,
     });
@@ -103,7 +104,24 @@ export function activate(context: vscode.ExtensionContext) {
         assert(typeof eventSource.fileName === "string");
         assert(typeof eventSource.lineNumber === "number");
         assert(typeof eventSource.columnNumber === "number");
+
+        if (eventSourcesTreeDataProvider.getChildren().length === 0) {
+          vscode.commands.executeCommand("spike-vscode.commands.showVisualizer");
+        }
+
         eventSourcesTreeDataProvider.addEventSource(eventSource);
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand("spike-vscode.commands.removeEventSource", (eventSource: Event.Source) => {
+        eventSourcesTreeDataProvider.removeEventSource(eventSource);
+      })
+    );
+
+    context.subscriptions.push(
+      vscode.commands.registerCommand("spike-vscode.commands.removeAllEventSources", () => {
+        eventSourcesTreeDataProvider.removeAllEventSources();
       })
     );
 
@@ -183,7 +201,7 @@ function createCodeActions(
     const eventSource: Event.Source = { fileName: document.uri.fsPath, ...lineAndColumnNumber };
     action.command = {
       command: "spike-vscode.commands.addEventSource",
-      title: "Add Event Source",
+      title: "Probe Observable...",
       arguments: [eventSource],
     };
 
@@ -213,11 +231,28 @@ class EventSourcesTreeDataProvider implements vscode.TreeDataProvider<Event.Sour
   }
 
   getTreeItem(element: Event.Source): vscode.TreeItem {
-    return new vscode.TreeItem(`${element.fileName}:${element.lineNumber}:${element.columnNumber}`);
+    const treeItem = new vscode.TreeItem(vscode.workspace.asRelativePath(element.fileName));
+    treeItem.description = `Ln ${element.lineNumber}, Col ${element.columnNumber}`;
+    treeItem.contextValue = "eventSource";
+    treeItem.iconPath = new vscode.ThemeIcon("pulse");
+    return treeItem;
   }
 
   addEventSource(eventSource: Event.Source) {
     this.eventSources = [...this.eventSources, eventSource];
+    this.onDidChangeTreeDataEventEmitter.fire();
+  }
+
+  removeEventSource(eventSource: Event.Source) {
+    const index = this.eventSources.indexOf(eventSource);
+    if (index !== -1) {
+      this.eventSources = [...this.eventSources.slice(0, index), ...this.eventSources.slice(index + 1)];
+      this.onDidChangeTreeDataEventEmitter.fire();
+    }
+  }
+
+  removeAllEventSources() {
+    this.eventSources = [];
     this.onDidChangeTreeDataEventEmitter.fire();
   }
 
