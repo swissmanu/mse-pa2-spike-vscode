@@ -1,4 +1,4 @@
-export * from "./Event";
+export * as Event from "./Event";
 
 export enum TreeMode {
   forEachChild,

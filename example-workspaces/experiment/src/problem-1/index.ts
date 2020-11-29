@@ -1,5 +1,5 @@
 import { merge, Observable } from 'rxjs';
-import { flatMap, map, startWith, tap } from '../shared/instrument';
+import { flatMap, map, startWith, switchMap, tap } from '../shared/instrument';
 import onReady from '../shared/onReady';
 import counter from '../shared/counter';
 import { default as createUI, Events, Update } from './ui';

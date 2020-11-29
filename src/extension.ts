@@ -4,7 +4,7 @@ import * as ts from "typescript";
 import * as vscode from "vscode";
 import * as ws from "ws";
 import { getDescendantAtRange } from "./compiler/getDescendantAtRange";
-import { Event, EventSource, TreeMode } from "./types";
+import { Event, TreeMode } from "./types";
 import { LineAndColumnComputer } from "./utils";
 
 const DEFAULT_DEBUGGER_PORT = 9229;
@@ -13,8 +13,58 @@ let httpServer: http.Server | null = null;
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-  let collectedEvents: Event[] = [];
-  let updateVisualizer: (events: ReadonlyArray<Event>) => void = () => {};
+  let collectedEvents: ({ source: Event.Source } & Event.Event)[] = [];
+  let updateVisualizer: (events: ReadonlyArray<{ source: Event.Source } & Event.Event>) => void = () => {};
+
+  function createVisualizer(panel: vscode.WebviewPanel) {
+    return (events: ReadonlyArray<{ source: Event.Source } & Event.Event>): void => {
+      panel.webview.html = `
+        <html>
+        <body>
+          <h1>Observable Probe Monitor</h1>
+          <button onclick="acquireVsCodeApi().postMessage({ command: 'clear' });">Clear</button>
+          <table>
+            <thead style="border-bottom: 1px solid">
+              <tr>
+                <th>Event</th>
+                <th>Value</th>
+                <th>Source</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${events
+                .map(
+                  (e) => `
+                  <tr>
+                    <td>
+                      ${Event.match(e)({
+                        Completed: () => "Completed",
+                        Error: () => "Error",
+                        Next: () => "Next",
+                        Subscribe: () => "Subscribe",
+                        Unsubscribe: () => "Unsubscribed",
+                      })}
+                    </td>
+                    <td>
+                      ${Event.match(e)({
+                        Completed: () => "",
+                        Error: ({ error }) => error,
+                        Next: ({ value }) => value,
+                        Subscribe: () => "",
+                        Unsubscribe: () => "",
+                      })}
+                    </td>
+                    <td>${e.source.fileName}:${e.source.lineNumber}:${e.source.columnNumber}</td>
+                  </tr>`
+                )
+                .join("\n")}
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `;
+    };
+  }
 
   context.subscriptions.push(
     vscode.commands.registerCommand("spike-vscode.commands.showVisualizer", () => {
@@ -33,18 +83,8 @@ export function activate(context: vscode.ExtensionContext) {
           updateVisualizer(collectedEvents);
         }
       });
-      updateVisualizer = (events) =>
-        (panel.webview.html = `
-      <html>
-      <body>
-        <h1>Observable Probe Monitor</h1>
-        <button onclick="acquireVsCodeApi().postMessage({ command: 'clear' });">Clear</button>
-        <ol>
-          ${events.map((e) => `<li>${JSON.stringify(e)}</li>`)}
-        </ol>
-      </body>
-      </html>
-      `);
+      updateVisualizer = createVisualizer(panel);
+      updateVisualizer(collectedEvents);
     })
   );
 
@@ -59,7 +99,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(treeView);
 
     context.subscriptions.push(
-      vscode.commands.registerCommand("spike-vscode.commands.addEventSource", (eventSource: EventSource) => {
+      vscode.commands.registerCommand("spike-vscode.commands.addEventSource", (eventSource: Event.Source) => {
         assert(typeof eventSource.fileName === "string");
         assert(typeof eventSource.lineNumber === "number");
         assert(typeof eventSource.columnNumber === "number");
@@ -76,6 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
           const jsonMessage = JSON.parse(rawMessage);
 
           if (typeof jsonMessage.source === "object") {
+            // TODO do actual parsing
             if (eventSourcesTreeDataProvider.hasEventSource(jsonMessage.source)) {
               collectedEvents.push(jsonMessage);
               updateVisualizer(collectedEvents);
@@ -139,7 +180,7 @@ function createCodeActions(
 
     const lineAndColumnNumber = lineAndColumnComputer.getNumberAndColumnFromPos(node.getStart(sourceFile));
 
-    const eventSource: EventSource = { fileName: document.uri.fsPath, ...lineAndColumnNumber };
+    const eventSource: Event.Source = { fileName: document.uri.fsPath, ...lineAndColumnNumber };
     action.command = {
       command: "spike-vscode.commands.addEventSource",
       title: "Add Event Source",
@@ -158,29 +199,29 @@ export function deactivate() {
   }
 }
 
-class EventSourcesTreeDataProvider implements vscode.TreeDataProvider<EventSource> {
+class EventSourcesTreeDataProvider implements vscode.TreeDataProvider<Event.Source> {
   private onDidChangeTreeDataEventEmitter: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData: vscode.Event<void> = this.onDidChangeTreeDataEventEmitter.event;
 
-  private eventSources: ReadonlyArray<EventSource> = [];
+  private eventSources: ReadonlyArray<Event.Source> = [];
 
-  getChildren(element?: EventSource): EventSource[] {
+  getChildren(element?: Event.Source): Event.Source[] {
     if (!element) {
-      return this.eventSources as EventSource[];
+      return this.eventSources as Event.Source[];
     }
     return [];
   }
 
-  getTreeItem(element: EventSource): vscode.TreeItem {
+  getTreeItem(element: Event.Source): vscode.TreeItem {
     return new vscode.TreeItem(`${element.fileName}:${element.lineNumber}:${element.columnNumber}`);
   }
 
-  addEventSource(eventSource: EventSource) {
+  addEventSource(eventSource: Event.Source) {
     this.eventSources = [...this.eventSources, eventSource];
     this.onDidChangeTreeDataEventEmitter.fire();
   }
 
-  hasEventSource(source: EventSource): boolean {
+  hasEventSource(source: Event.Source): boolean {
     const sourceFileName = source.fileName.startsWith("webpack://") ? source.fileName.substr(10) : source.fileName;
 
     return (

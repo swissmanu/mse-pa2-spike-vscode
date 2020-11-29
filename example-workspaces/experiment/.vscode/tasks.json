@@ -27,7 +27,7 @@
         ],
         "background": {
           "activeOnStart": true,
-          "beginsPattern": "Compiling\\.\\.\\.",
+          "beginsPattern": "webpack-dev-server --port 8080",
           "endsPattern": "Compiled successfully\\."
         }
       }

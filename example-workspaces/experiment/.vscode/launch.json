@@ -11,8 +11,8 @@
       // "preLaunchTask": "webpack-dev-server",
       "url": "http://localhost:8080/one.html",
       "webRoot": "${workspaceFolder}",
-      // "sourceMaps": true,
-      // "trace": true
+      "sourceMaps": true,
+      "trace": true
     }
   ]
 }
