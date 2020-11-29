@@ -5,22 +5,14 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "type": "node",
-      "request": "launch",
-      "name": "Launch NodeJS",
-      "skipFiles": ["<node_internals>/**"],
-      "program": "${workspaceFolder}/src/node.ts",
-      "runtimeArgs": ["-r", "ts-node/register"]
-    },
-    {
       "type": "chrome",
       "request": "launch",
       "name": "Launch Browser",
-      "preLaunchTask": "webpack-dev-server",
-      "url": "http://localhost:8081",
+      // "preLaunchTask": "webpack-dev-server",
+      "url": "http://localhost:8080/one.html",
       "webRoot": "${workspaceFolder}",
-      "sourceMaps": true,
-      "trace": true
+      // "sourceMaps": true,
+      // "trace": true
     }
   ]
 }

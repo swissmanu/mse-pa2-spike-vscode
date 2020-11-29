@@ -15,13 +15,13 @@ export function createEngine(
       setInput('');
       showValue('');
     }),
+
     flatMap(() =>
       merge(
         input.pipe(tap(() => setButtonsEnabled(false))),
         counter(increment, decrement).pipe(map((count) => `${count}`))
       )
-    ),
-    tap((x) => console.log(x))
+    )
   );
 }
 

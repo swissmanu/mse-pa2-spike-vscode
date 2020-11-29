@@ -1,4 +1,4 @@
-import * as WebSocket from 'isomorphic-ws';
+import WebSocket from 'isomorphic-ws';
 import { QueueingSubject } from 'queueing-subject';
 import {
   MonoTypeOperatorFunction,
@@ -6,7 +6,7 @@ import {
   ObservableInput,
   ObservedValueOf,
   OperatorFunction,
-  Subscriber
+  Subscriber,
 } from 'rxjs';
 import * as RxOps from 'rxjs/operators';
 import * as StackTrace from 'stacktrace-js';

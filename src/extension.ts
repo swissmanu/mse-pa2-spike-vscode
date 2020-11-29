@@ -1,5 +1,3 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import { assert } from "console";
 import * as http from "http";
 import * as ts from "typescript";
@@ -15,8 +13,6 @@ let httpServer: http.Server | null = null;
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-  // rxJsInspection -> link up with package.json contribution
-
   let collectedEvents: Event[] = [];
   let updateVisualizer: (events: ReadonlyArray<Event>) => void = () => {};
 
@@ -125,6 +121,11 @@ function findFirstIdentifierChild(node: ts.Node, sourceFile: ts.SourceFile): ts.
   return index !== -1 ? children[index] : null;
 }
 
+const instrumentedOperatorNames = ["map", "take", "flatMap", "switchMap", "distinctUntilChanged", "tap", "startWith"];
+function isInstrumentedOperator(x: string): boolean {
+  return instrumentedOperatorNames.indexOf(x) !== -1;
+}
+
 function createCodeActions(
   sourceFile: ts.SourceFile,
   node: ts.Node,
@@ -133,7 +134,7 @@ function createCodeActions(
 ): vscode.CodeAction[] {
   const text = node.getText(sourceFile);
 
-  if (text === "map" || text === "take") {
+  if (isInstrumentedOperator(text)) {
     const action = new vscode.CodeAction("Probe Observable...", vscode.CodeActionKind.Empty);
 
     const lineAndColumnNumber = lineAndColumnComputer.getNumberAndColumnFromPos(node.getStart(sourceFile));
@@ -141,7 +142,7 @@ function createCodeActions(
     const eventSource: EventSource = { fileName: document.uri.fsPath, ...lineAndColumnNumber };
     action.command = {
       command: "spike-vscode.commands.addEventSource",
-      title: "Debug Observable...",
+      title: "Add Event Source",
       arguments: [eventSource],
     };
 
@@ -180,12 +181,14 @@ class EventSourcesTreeDataProvider implements vscode.TreeDataProvider<EventSourc
   }
 
   hasEventSource(source: EventSource): boolean {
+    const sourceFileName = source.fileName.startsWith("webpack://") ? source.fileName.substr(10) : source.fileName;
+
     return (
       this.eventSources.findIndex(
         (es) =>
-          es.fileName === source.fileName &&
+          es.fileName.endsWith(sourceFileName) &&
           es.lineNumber === source.lineNumber &&
-          es.columnNumber === source.columnNumber
+          es.columnNumber === source.columnNumber + 1 // TODO WHY +1?!
       ) !== -1
     );
   }

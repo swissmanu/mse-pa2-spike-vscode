@@ -10,9 +10,12 @@ module.exports = {
   resolve: {
     extensions: [".ts", ".js"],
   },
-  devtool: 'source-map',
+  devtool: "source-map",
   module: {
     rules: [{ test: /.ts$/, loader: "ts-loader" }],
+  },
+  devServer: {
+    port: 8081,
   },
   plugins: [
     new HtmlWebpackPlugin({
