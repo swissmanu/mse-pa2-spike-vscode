@@ -1,7 +1,7 @@
 import { merge, Observable } from 'rxjs';
-import { flatMap, map, startWith, switchMap, tap } from '../shared/instrument';
-import onReady from '../shared/onReady';
 import counter from '../shared/counter';
+import { flatMap, map, startWith, tap } from '../shared/instrument';
+import onReady from '../shared/onReady';
 import { default as createUI, Events, Update } from './ui';
 
 export function createEngine(

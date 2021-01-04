@@ -21,7 +21,7 @@ export function activate(context: vscode.ExtensionContext) {
       panel.webview.html = `
         <html>
         <body>
-          <h1>Observable Probe Monitor</h1>
+          <h1>Observable Log Points</h1>
           <button onclick="acquireVsCodeApi().postMessage({ command: 'clear' });">Clear</button>
           <table>
             <thead style="border-bottom: 1px solid">
@@ -68,14 +68,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("spike-vscode.commands.showVisualizer", () => {
-      const panel = vscode.window.createWebviewPanel(
-        "visualizer",
-        "Observable Probe Monitor",
-        vscode.ViewColumn.Beside,
-        {
-          enableScripts: true,
-        }
-      );
+      const panel = vscode.window.createWebviewPanel("visualizer", "Observable Log Points", vscode.ViewColumn.Beside, {
+        enableScripts: true,
+      });
       panel.onDidDispose(() => {}, null, context.subscriptions);
       panel.webview.onDidReceiveMessage(({ command }) => {
         if (command === "clear") {
@@ -180,7 +175,16 @@ function findFirstIdentifierChild(node: ts.Node, sourceFile: ts.SourceFile): ts.
   return index !== -1 ? children[index] : null;
 }
 
-const instrumentedOperatorNames = ["map", "take", "flatMap", "switchMap", "distinctUntilChanged", "tap", "startWith"];
+const instrumentedOperatorNames = [
+  "map",
+  "take",
+  "flatMap",
+  "switchMap",
+  "distinctUntilChanged",
+  "tap",
+  "startWith",
+  "scan",
+];
 function isInstrumentedOperator(x: string): boolean {
   return instrumentedOperatorNames.indexOf(x) !== -1;
 }
@@ -194,14 +198,14 @@ function createCodeActions(
   const text = node.getText(sourceFile);
 
   if (isInstrumentedOperator(text)) {
-    const action = new vscode.CodeAction("Probe Observable...", vscode.CodeActionKind.Empty);
+    const action = new vscode.CodeAction("Add Log Point to Operator...", vscode.CodeActionKind.Empty);
 
     const lineAndColumnNumber = lineAndColumnComputer.getNumberAndColumnFromPos(node.getStart(sourceFile));
 
     const eventSource: Event.Source = { fileName: document.uri.fsPath, ...lineAndColumnNumber };
     action.command = {
       command: "spike-vscode.commands.addEventSource",
-      title: "Probe Observable...",
+      title: "Add Log Point to Operator...",
       arguments: [eventSource],
     };
 

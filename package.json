@@ -1,8 +1,17 @@
 {
   "name": "spike-vscode",
-  "displayName": "spike-vscode",
-  "description": "Spike",
+  "displayName": "Prototype RxJS Debugging",
+  "description": "Prototype RxJS Debugging",
   "version": "0.0.1",
+  "publisher": "manuelalabor",
+  "author": {
+    "name": "Manuel Alabor",
+    "email": "manuel@alabor.me",
+    "url": "https://alabor.me"
+  },
+  "repository": {
+    "url": "https://alabor.me"
+  },
   "engines": {
     "vscode": "^1.49.0"
   },
@@ -21,22 +30,22 @@
     "commands": [
       {
         "command": "spike-vscode.commands.showVisualizer",
-        "title": "Observable Probe Monitor",
+        "title": "Observable Log Points",
         "icon": "$(radio-tower)"
       },
       {
         "command": "spike-vscode.commands.addEventSource",
-        "title": "Probe Observable...",
+        "title": "Add Log Point to Operator...",
         "icon": "$(radio-tower)"
       },
       {
         "command": "spike-vscode.commands.removeEventSource",
-        "title": "Delete Observable Probe",
+        "title": "Remove Log Point",
         "icon": "$(remove)"
       },
       {
         "command": "spike-vscode.commands.removeAllEventSources",
-        "title": "Delete All Observable Probes",
+        "title": "Remove All Log Points",
         "icon": "$(close-all)"
       }
     ],
@@ -59,8 +68,7 @@
       "debug": [
         {
           "id": "spike-vscode.views.eventSources",
-          "name": "Observable Probes",
-          "when": "debugConfigurationType == 'node' || debugConfigurationType == 'chrome'"
+          "name": "Observable Log Points"
         }
       ]
     }
@@ -71,27 +79,27 @@
     "lint": "eslint src --ext ts",
     "watch": "tsc -watch -p ./",
     "pretest": "yarn run compile && yarn run lint",
-    "test": "node ./out/test/runTest.js"
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package",
+    "clean": "rm -rf out && rm *.vsix"
   },
   "devDependencies": {
     "@types/glob": "^7.1.3",
     "@types/node": "^14.0.27",
-    "@types/node-ipc": "^9.1.3",
+    "@types/ws": "^7.2.6",
     "@types/vscode": "^1.49.0",
     "@typescript-eslint/eslint-plugin": "^4.1.1",
     "@typescript-eslint/parser": "^4.1.1",
     "eslint": "^7.9.0",
     "glob": "^7.1.6",
     "prettier": "^2.1.2",
-    "typescript": "^4.0.2",
     "vscode-test": "^1.4.0"
   },
   "prettier": {
     "printWidth": 120
   },
   "dependencies": {
-    "@types/ws": "^7.2.6",
-    "node-ipc": "^9.1.1",
+    "typescript": "^4.0.2",
     "ws": "^7.3.1"
   }
 }
