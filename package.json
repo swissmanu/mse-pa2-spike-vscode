@@ -2,7 +2,7 @@
   "name": "spike-vscode",
   "displayName": "Prototype RxJS Debugging",
   "description": "Prototype RxJS Debugging",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "manuelalabor",
   "author": {
     "name": "Manuel Alabor",
