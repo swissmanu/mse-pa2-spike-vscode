@@ -243,7 +243,13 @@ class EventSourcesTreeDataProvider implements vscode.TreeDataProvider<Event.Sour
   }
 
   addEventSource(eventSource: Event.Source) {
-    this.eventSources = [...this.eventSources, eventSource];
+    this.eventSources = [
+      ...this.eventSources,
+      {
+        ...eventSource,
+        fileName: eventSource.fileName.replace(/\\/g, "/"), // Windows uses backslashes 🤷‍♂️
+      },
+    ];
     this.onDidChangeTreeDataEventEmitter.fire();
   }
 
