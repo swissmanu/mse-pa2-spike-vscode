@@ -184,6 +184,7 @@ const instrumentedOperatorNames = [
   "tap",
   "startWith",
   "scan",
+  "filter",
 ];
 function isInstrumentedOperator(x: string): boolean {
   return instrumentedOperatorNames.indexOf(x) !== -1;
